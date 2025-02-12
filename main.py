@@ -4,12 +4,13 @@ def run_length_encode(data: bytes, outf) -> None:
 
     counter = 1
     for i in range(1, len(data)):
-        if data[i-1] == data[i]:
+        if data[i - 1] == data[i]:
             counter += 1
         else:
-            outf.write(hex(counter).encode('ascii') + b' ' + hex(data[i-1]).encode('utf-8') + b' ')
+            outf.write(hex(counter).encode('ascii') + b' ' + hex(data[i - 1]).encode('utf-8') + b' ')
             counter = 1
-    outf.write(hex(counter).encode('ascii') + b' ' + hex(data[i-1]).encode('utf-8') + b' ')
+
+    outf.write(hex(counter).encode('ascii') + b' ' + hex(data[-1]).encode('utf-8') + b' ')
 
 
 def decode(data: bytes) -> bytes:
@@ -52,3 +53,4 @@ compression_ratio = original_size / encoded_size if encoded_size != 0 else 0
 print(f"Original size: {original_size} bytes")
 print(f"Encoded size: {encoded_size} bytes")
 print(f"Compression ratio: {compression_ratio:.2f}")
+
