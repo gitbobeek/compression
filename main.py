@@ -1,56 +1,77 @@
-def run_length_encode(data: bytes, outf) -> None:
+def run_length_encode(data: bytes, outf, M: int) -> None:
     if len(data) == 0:
         return
 
-    counter = 1
-    for i in range(1, len(data)):
-        if data[i - 1] == data[i]:
-            counter += 1
-        else:
-            outf.write(hex(counter).encode('ascii') + b' ' + hex(data[i - 1]).encode('utf-8') + b' ')
-            counter = 1
-
-    outf.write(hex(counter).encode('ascii') + b' ' + hex(data[-1]).encode('utf-8') + b' ')
-
-
-def decode(data: bytes) -> bytes:
-    decoded = bytearray()
-    text_bytes = data.split(b' ')
+    symbol_size = M // 8  # Размер символа в байтах
     i = 0
-    while i < len(text_bytes) - 1:
-        count = int(text_bytes[i], 16)
-        byte = int(text_bytes[i + 1], 16)
-        decoded.extend([byte] * count)
-        i += 2
+    while i < len(data):
+        repeat_length = 1
+        current_symbol = data[i:i + symbol_size]
+        while i + (repeat_length + 1) * symbol_size <= len(data) and data[i + repeat_length * symbol_size:i + (repeat_length + 1) * symbol_size] == current_symbol:
+            repeat_length += 1
+
+        if repeat_length > 1:
+            # Записываем повторяющуюся последовательность
+            # Ограничиваем длину 127, чтобы управляющий байт был в диапазоне 0-255
+            while repeat_length > 0:
+                chunk_length = min(repeat_length, 127)
+                outf.write(bytes([chunk_length]) + current_symbol)
+                i += chunk_length * symbol_size
+                repeat_length -= chunk_length
+        else:
+            # Находим длину неповторяющейся последовательности
+            non_repeat_length = 1
+            while i + (non_repeat_length + 1) * symbol_size <= len(data) and (
+                i + (non_repeat_length + 2) * symbol_size > len(data) or data[i + non_repeat_length * symbol_size:i + (non_repeat_length + 1) * symbol_size] != data[i + (non_repeat_length + 1) * symbol_size:i + (non_repeat_length + 2) * symbol_size]
+            ):
+                non_repeat_length += 1
+
+            # Записываем неповторяющуюся последовательность
+            # Ограничиваем длину 127, чтобы управляющий байт был в диапазоне 0-255
+            while non_repeat_length > 0:
+                chunk_length = min(non_repeat_length, 127)
+                outf.write(bytes([0x80 | chunk_length]) + data[i:i + chunk_length * symbol_size])
+                i += chunk_length * symbol_size
+                non_repeat_length -= chunk_length
+
+
+def decode(data: bytes, M: int) -> bytes:
+    decoded = bytearray()
+    symbol_size = M // 8  # Размер символа в байтах
+    i = 0
+    while i < len(data):
+        control_byte = data[i]
+        if control_byte & 0x80:  # Неповторяющаяся последовательность
+            length = control_byte & 0x7F
+            decoded.extend(data[i + 1:i + 1 + length * symbol_size])
+            i += 1 + length * symbol_size
+        else:  # Повторяющаяся последовательность
+            length = control_byte
+            symbol = data[i + 1:i + 1 + symbol_size]
+            decoded.extend(symbol * length)
+            i += 1 + symbol_size
     return bytes(decoded)
 
 
-def get_encoded_size(data: str) -> int:
-    counter = 0
-    for i in data:
-        if i == ' ':
-            counter += 1
-    return counter
+# Чтение данных из файла
+with open('utf8.txt', 'rb') as f:
+    input_data = f.read()
 
+# Параметры
+M = 8  # Длина кода символов в битах (1 байт)
 
-f = open('test_input_file', 'rb').read()
-original_size = len(f)
-
-out = open('test_output_file', 'wb')
-run_length_encode(f, out)
+# Кодирование
+out = open('test_output_file.txt', 'wb')
+run_length_encode(input_data, out, M)
 out.close()
 
-encoded_data = open('test_output_file', 'rb').read()
-encoded_size = get_encoded_size(str(encoded_data))
+# Декодирование
+encoded_data = open('test_output_file.txt', 'rb').read()
+decoded_data = decode(encoded_data, M)
 
-decoded_data = decode(encoded_data)
+# Запись декодированных данных в файл
+with open('test_decoded_file', 'wb') as f:
+    f.write(decoded_data)
 
-out = open('test_decoded_file', 'wb')
-out.write(decoded_data)
-out.close()
-
-compression_ratio = original_size / encoded_size if encoded_size != 0 else 0
-print(f"Original size: {original_size} bytes")
-print(f"Encoded size: {encoded_size} bytes")
-print(f"Compression ratio: {compression_ratio:.2f}")
-
+# Проверка
+print("Decoded data matches original:", input_data == decoded_data)
