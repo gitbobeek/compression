@@ -54,19 +54,19 @@ def decode(data: bytes, M: int) -> bytes:
 
 
 # Чтение данных из файла
-with open('utf8.txt', 'rb') as f:
+with open('test_image.txt', 'rb') as f:
     input_data = f.read()
 
 # Параметры
 M = 8  # Длина кода символов в битах (1 байт)
 
 # Кодирование
-out = open('test_output_file.txt', 'wb')
+out = open('test_output_file', 'wb')
 run_length_encode(input_data, out, M)
 out.close()
 
 # Декодирование
-encoded_data = open('test_output_file.txt', 'rb').read()
+encoded_data = open('test_output_file', 'rb').read()
 decoded_data = decode(encoded_data, M)
 
 # Запись декодированных данных в файл
