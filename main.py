@@ -1,25 +1,35 @@
-input_string = open('test_file.txt', 'rb').read()
+from compression_algorithms import *
 
 
-def letter(hexcode: str):
-    return chr(int(hexcode, 16))
+def main():
+
+    file = open("input.txt", "rb")
+    data = file.read()
+    file.close()
+
+    # Сжатие данных
+    compressed, root = huffman_compress(data)
+    print(f"Сжатые данные: {compressed}")
 
 
-def word(hexword: list):
-    word_ = ''
-    for i in range(len(hexword)):
-        word_ += letter(hexword[i])
-    return word_
+    file = open("compressed.bin", "wb")
+    file.write(compressed)
+    file.close()
 
 
-def BWT(s):
-    matrix = [
-         s[n:] + s[:n] for n in range(len(s))
-    ]
-
-    matrix.sort()
-
-    print(matrix)
+    file = open("compressed.bin", "rb")
+    compressed_data = file.read()
+    file.close()
 
 
-BWT(input_string)
+    decompressed = huffman_decompress(compressed_data, root)
+    print(f"Разжаты данные: {decompressed}")
+
+
+    file = open("output.txt", "wb")
+    file.write(decompressed)
+    file.close()
+
+
+if __name__ == '__main__':
+    main()
