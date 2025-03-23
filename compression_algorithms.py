@@ -1,6 +1,6 @@
 import heapq
-from collections import Counter, defaultdict
-from typing import Tuple
+import mmap
+from collections import Counter
 
 
 def rle_compress(data: bytes) -> bytes:
@@ -32,71 +32,53 @@ def rle_decompress(data: bytes) -> bytes:
     return bytes(decompressed)
 
 
-def serialize_lz77(compressed: list) -> bytes:
-    result = bytearray()
-    for node in compressed:
-        result.extend(node.offset.to_bytes(2, 'big'))
-        result.extend(node.length.to_bytes(2, 'big'))
-        result.append(node.next_byte if node.next_byte is not None else 0)
-    return bytes(result)
-
-def deserialize_lz77(data: bytes) -> list:
-    compressed = []
-    for i in range(0, len(data), 5):
-        offset = int.from_bytes(data[i:i+2], 'big')
-        length = int.from_bytes(data[i+2:i+4], 'big')
-        next_byte = data[i+4] if data[i+4] != 0 else None
-        compressed.append(LZ77Node(offset, length, next_byte))
-    return compressed
-
-
-class LZ77Node:
-    def __init__(self, offset: int, length: int, next_byte: int):
-        self.offset = offset
-        self.length = length
-        self.next_byte = next_byte
-
-
 def lz77_compress(data: bytes, window_size: int = 4096) -> bytes:
-    compressed_nodes = []
+    compressed = bytearray()
     pos = 0
 
     while pos < len(data):
         match_offset, match_length = 0, 0
-
         search_start = max(0, pos - window_size)
         buffer = data[search_start:pos]
 
-        for length in range(1, min(len(data) - pos, window_size)):
-            substring = data[pos:pos + length]
-            index = buffer.rfind(substring)
+        hash_table = {}
+        for i in range(len(buffer)):
+            hash_table[buffer[i:i + 3]] = i
 
-            if index != -1:
-                match_offset = pos - (search_start + index)
+        for length in range(3, min(len(data) - pos, window_size)):
+            substring = data[pos:pos + length]
+            if substring in hash_table:
+                match_offset = pos - (search_start + hash_table[substring])
                 match_length = length
             else:
                 break
 
-        next_byte = data[pos + match_length] if pos + match_length < len(data) else None
-        compressed_nodes.append(LZ77Node(match_offset, match_length, next_byte))
+        next_byte = data[pos + match_length] if pos + match_length < len(data) else 0
+        compressed.extend(match_offset.to_bytes(2, 'big'))
+        compressed.extend(match_length.to_bytes(2, 'big'))
+        compressed.append(next_byte)
         pos += match_length + 1
 
-    return serialize_lz77(compressed_nodes)
+    return bytes(compressed)
+
 
 def lz77_decompress(compressed_data: bytes) -> bytes:
-    compressed_nodes = deserialize_lz77(compressed_data)
     decompressed = bytearray()
+    i = 0
 
-    for node in compressed_nodes:
-        if node.length > 0:
-            start = len(decompressed) - node.offset
-            if start < 0 or start + node.length > len(decompressed):
-                raise ValueError("Invalid LZ77 compressed data")
-            for i in range(node.length):
-                decompressed.append(decompressed[start + i])
+    while i < len(compressed_data):
+        offset = int.from_bytes(compressed_data[i:i+2], 'big')
+        length = int.from_bytes(compressed_data[i+2:i+4], 'big')
+        next_byte = compressed_data[i+4]
+        i += 5
 
-        if node.next_byte is not None:
-            decompressed.append(node.next_byte)
+        if offset > 0 and length > 0:
+            start = len(decompressed) - offset
+            for j in range(length):
+                decompressed.append(decompressed[start + j])
+
+        if next_byte != 0:
+            decompressed.append(next_byte)
 
     return bytes(decompressed)
 
@@ -107,9 +89,9 @@ class LZ78Node:
         self.next_byte = next_byte
 
 
-def lz78_compress(data: bytes) -> bytes:
+def lz78_compress(data: bytes, max_dict_size: int = 4096) -> bytes:
     dictionary = {b"": 0}
-    compressed = []
+    compressed = bytearray()
     buffer = bytearray()
     dict_size = 1
 
@@ -117,20 +99,19 @@ def lz78_compress(data: bytes) -> bytes:
         buffer.append(byte)
         if bytes(buffer) not in dictionary:
             pos = dictionary.get(bytes(buffer[:-1]), 0)
-            compressed.append((pos, buffer[-1]))
-            dictionary[bytes(buffer)] = dict_size
-            dict_size += 1
+            compressed.extend(pos.to_bytes(2, 'big'))
+            compressed.append(buffer[-1])
+            if dict_size < max_dict_size:
+                dictionary[bytes(buffer)] = dict_size
+                dict_size += 1
             buffer.clear()
 
     if buffer:
         pos = dictionary.get(bytes(buffer[:-1]), 0)
-        compressed.append((pos, buffer[-1]))
+        compressed.extend(pos.to_bytes(2, 'big'))
+        compressed.append(buffer[-1])
 
-    result = bytearray()
-    for pos, byte in compressed:
-        result.extend(pos.to_bytes(2, 'big'))
-        result.append(byte)
-    return bytes(result)
+    return bytes(compressed)
 
 def lz78_decompress(compressed_data: bytes) -> bytes:
     dictionary = [b""]
@@ -148,49 +129,25 @@ def lz78_decompress(compressed_data: bytes) -> bytes:
     return bytes(decompressed)
 
 
-def bwt_compress_blocks(input_file: str, output_file: str, block_size: int = 1024):
-    with open(input_file, "rb") as infile, open(output_file, "wb") as outfile:
-        while True:
-            block = infile.read(block_size)
-            if not block:
-                break
-            transformed_block = bwt_transform(block)
-            outfile.write(transformed_block)
-
-
-def bwt_decompress_blocks(input_file: str, output_file: str, block_size: int = 1024):
-    with open(input_file, "rb") as infile, open(output_file, "wb") as outfile:
-        while True:
-            block = infile.read(block_size)
-            if not block:
-                break
-            original_block = bwt_inverse(block)
-            outfile.write(original_block)
-
-
 def bwt_transform(data: bytes) -> bytes:
     if not data:
         return b""
 
-    n = len(data)
-    # Создаем суффиксный массив с использованием внешней сортировки
-    suffixes = sorted(range(n), key=lambda i: data[i:])
-    # Собираем последний столбец BWT
-    last_column = bytearray()
-    for i in suffixes:
-        last_column.append(data[(i - 1) % n])
-    return bytes(last_column)
+    data = data + b"\x00"  # Добавляем терминальный символ
+    suffix_array = sorted(range(len(data)), key=lambda i: data[i:])
+    return bytes(data[i - 1] for i in suffix_array)
+
 
 def bwt_inverse(data: bytes) -> bytes:
     if not data:
         return b""
 
     n = len(data)
-    # Создаем таблицу для обратного преобразования
     table = [bytearray() for _ in range(n)]
+
     for _ in range(n):
         table = sorted(bytes([data[i]]) + table[i] for i in range(n))
-    # Находим строку, заканчивающуюся символом конца данных
+
     for row in table:
         if row.endswith(b"\x00"):
             return row[:-1]
@@ -234,9 +191,6 @@ def generate_huffman_codes(node, prefix=""):
 
 
 def huffman_compress(data: bytes) -> tuple[bytes, HuffmanNode]:
-    if not data:
-        return b"", None
-
     root = build_huffman_tree(data)
     codebook = generate_huffman_codes(root)
 
@@ -295,3 +249,13 @@ def mtf_decompress(compressed_data: bytes) -> bytes:
         alphabet.insert(0, byte)
 
     return bytes(result)
+
+
+def process_large_file(input_file: str, output_file: str, process_function, block_size: int = 4096):
+    with open(input_file, "rb") as infile, open(output_file, "wb") as outfile:
+        with mmap.mmap(infile.fileno(), length=0, access=mmap.ACCESS_READ) as mmapped_file:
+            pos = 0
+            while pos < len(mmapped_file):
+                chunk = mmapped_file[pos:pos + block_size]
+                outfile.write(process_function(chunk))
+                pos += block_size

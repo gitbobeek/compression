@@ -1,35 +1,13 @@
 from compression_algorithms import *
 
+if __name__ == "__main__":
+    """
+    process_large_file("enwik7.txt", "compressed_bwt.bin", bwt_transform)
+    process_large_file("compressed_bwt.bin", "output_bwt.txt", bwt_inverse)
+    """
 
-def main():
+    process_large_file("enwik7.txt", "compressed_lz77.bin", lz77_compress)
+    process_large_file("compressed_lz77.bin", "output_lz77.txt", lz77_decompress)
 
-    file = open("input.txt", "rb")
-    data = file.read()
-    file.close()
-
-    # Сжатие данных
-    compressed, root = huffman_compress(data)
-    print(f"Сжатые данные: {compressed}")
-
-
-    file = open("compressed.bin", "wb")
-    file.write(compressed)
-    file.close()
-
-
-    file = open("compressed.bin", "rb")
-    compressed_data = file.read()
-    file.close()
-
-
-    decompressed = huffman_decompress(compressed_data, root)
-    print(f"Разжаты данные: {decompressed}")
-
-
-    file = open("output.txt", "wb")
-    file.write(decompressed)
-    file.close()
-
-
-if __name__ == '__main__':
-    main()
+    process_large_file("enwik7.txt", "compressed_lz78.bin", lz78_compress)
+    process_large_file("compressed_lz78.bin", "output_lz78.txt", lz78_decompress)
