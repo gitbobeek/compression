@@ -1,93 +1,87 @@
-from util import count_symb as cs
+from util import count_symb as ca
 import queue
 
 
-class Node:
-    def __init__(self, symbol=None, counter=None, left=None, right=None, parent=None):
-        self.symbol = symbol
-        self.counter = counter
+class HuffmanNode:
+    def __init__(self, char=None, frequency=None, left=None, right=None, parent=None):
+        self.char = char
+        self.frequency = frequency
         self.left = left
         self.right = right
         self.parent = parent
 
     def __lt__(self, other):
-        return self.counter < other.counter
+        return self.frequency < other.frequency
 
 
-def read_huffman_codes(codes_file):
-    huffman_codes = {}
-    with open(codes_file, 'r') as f:
-        for line in f:
-            symbol, code = line.strip().split(':')
-            huffman_codes[int(symbol)] = code
-    return huffman_codes
+def load_huffman_codes(code_file_path):
+    code_map = {}
+    with open(code_file_path) as file:
+        for line in file:
+            char, code = line.strip().split(':')
+            code_map[int(char)] = code
+    return code_map
 
 
-def huffman_compress(data: bytes):
-    C = cs.count_symb(data)
-    list_of_leafs = []
-    Q = queue.PriorityQueue()
+def huffman_compress(input_data):
+    freq_table = ca.count_symb(input_data)
+    leaf_nodes = []
+    min_heap = queue.PriorityQueue()
 
-    for i in range(256):
-        if C[i] != 0:
-            leaf = Node(symbol=i, counter=C[i])
-            list_of_leafs.append(leaf)
-            Q.put(leaf)
+    for char in range(256):
+        if freq_table[char] > 0:
+            node = HuffmanNode(char=char, frequency=freq_table[char])
+            leaf_nodes.append(node)
+            min_heap.put(node)
 
-    while Q.qsize() >= 2:
-        left_node = Q.get()
-        right_node = Q.get()
-        parent_node = Node(left=left_node, right=right_node)
-        left_node.parent = parent_node
-        right_node.parent = parent_node
-        parent_node.counter = left_node.counter + right_node.counter
-        Q.put(parent_node)
+    while min_heap.qsize() > 1:
+        left = min_heap.get()
+        right = min_heap.get()
+        merged = HuffmanNode(
+            left=left,
+            right=right,
+            frequency=left.frequency + right.frequency
+        )
+        left.parent = merged
+        right.parent = merged
+        min_heap.put(merged)
 
-    codes = {}
-    for leaf in list_of_leafs:
-        node = leaf
-        code = ""
-        while node.parent is not None:
-            if node.parent.left == node:
-                code = "0" + code
-            else:
-                code = "1" + code
-            node = node.parent
-        codes[leaf.symbol] = code
+    encoding_map = {}
+    for node in leaf_nodes:
+        current = node
+        code_bits = []
+        while current.parent:
+            code_bits.insert(0, '0' if current.parent.left == current else '1')
+            current = current.parent
+        encoding_map[node.char] = ''.join(code_bits)
 
-    coded_message = ""
-    for byte in data:
-        coded_message += codes[byte]
+    bit_stream = ''.join(encoding_map[byte] for byte in input_data)
 
-    padding = 8 - len(coded_message) % 8
-    coded_message += '0' * padding
-    coded_message = f"{padding:08b}" + coded_message
+    pad_length = (8 - len(bit_stream) % 8)
+    padded_stream = f"{pad_length:08b}{bit_stream}{'0' * pad_length}"
 
-    bytes_string = bytearray()
-    for i in range(0, len(coded_message), 8):
-        byte = coded_message[i:i + 8]
-        bytes_string.append(int(byte, 2))
+    compressed = bytearray()
+    for i in range(0, len(padded_stream), 8):
+        compressed.append(int(padded_stream[i:i + 8], 2))
 
-    return bytes(bytes_string), codes
+    return bytes(compressed), encoding_map
 
 
-def huffman_decompress(compressed_data: bytes, huffman_codes: dict) -> bytes:
-    padding = compressed_data[0]
-    coded_message = ""
-    for byte in compressed_data[1:]:
-        coded_message += f"{byte:08b}"
+def huffman_decompress(compressed_data, encoding_map):
+    pad_info = compressed_data[0]
+    bit_stream = ''.join(f"{byte:08b}" for byte in compressed_data[1:])
 
-    if padding > 0:
-        coded_message = coded_message[:-padding]
+    if pad_info > 0:
+        bit_stream = bit_stream[:-pad_info]
 
-    reverse_codes = {v: k for k, v in huffman_codes.items()}
-    current_code = ""
-    decoded_data = bytearray()
+    decoding_map = {code: char for char, code in encoding_map.items()}
+    buffer = ""
+    output = bytearray()
 
-    for bit in coded_message:
-        current_code += bit
-        if current_code in reverse_codes:
-            decoded_data.append(reverse_codes[current_code])
-            current_code = ""
+    for bit in bit_stream:
+        buffer += bit
+        if buffer in decoding_map:
+            output.append(decoding_map[buffer])
+            buffer = ""
 
-    return bytes(decoded_data)
+    return bytes(output)
