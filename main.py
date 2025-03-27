@@ -1,17 +1,23 @@
-from compressors.bwt_rle import *
+from numpy.ma.core import compressed
 
-with open("test_files/test_data.bin", "rb") as file:
-    data = file.read()
-print(f"Длина исходного файла: {len(data)}")
+from compressors.lz78_ha import *
 
-compressed_data = bwt_rle_compress(data)
-with open("tests/compressed_files/binary/BWT_RLE_compressed.bin", "wb") as file:
-    file.write(compressed_data)
-print(f"Длина сжатого файла: {len(compressed_data)}")
 
-decompressed_data = bwt_rle_decompress(compressed_data)
-with open("tests/decompressed_files/binary/BWT_RLE_compressed.txt", "wb") as file:
-    file.write(decompressed_data)
+if __name__ == "__main__":
+    input_file = "test_files/gs.raw"
+    compressed_file = "tests/compressed_files/gs_photo/LZ78_HA_compressed.bin"
+    decompressed_file = "tests/decompressed_files/gs_photo/LZ78_HA_decompressed.txt"
 
-print(f"Коэффициент сжатия: {format((len(data) / len(compressed_data)), '.3f')}")
-print("Успех!" if decompressed_data == data else "Данные повреждены")
+    # Сжатие
+    lz78_huffman_compress(input_file, compressed_file)
+
+    # Распаковка
+    lz78_huffman_decompress(compressed_file, decompressed_file)
+
+    # Проверка
+    with open(input_file, 'rb') as f1, open(decompressed_file, 'rb') as f2, open(compressed_file, 'rb') as f3:
+        original = f1.read()
+        decompressed = f2.read()
+        compressed = f3.read()
+        print(len(original) / len(compressed))
+        print("Проверка целостности:", "OK" if original == decompressed else "FAILED")
