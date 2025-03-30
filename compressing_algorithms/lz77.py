@@ -3,15 +3,6 @@ import time
 
 
 def print_progress(iteration: int, total: int, prefix: str = '', suffix: str = '', length: int = 50, fill: str = '█'):
-    """
-    Выводит progress bar в терминал
-    :param iteration: текущая итерация
-    :param total: общее количество итераций
-    :param prefix: текст перед progress bar
-    :param suffix: текст после progress bar
-    :param length: длина progress bar в символах
-    :param fill: символ заполнения
-    """
     percent = f"{100 * (iteration / float(total)):.1f}"
     filled_length = int(length * iteration // total)
     bar = fill * filled_length + '-' * (length - filled_length)
@@ -104,10 +95,17 @@ def lz77_decompress(encoded_data: bytes, show_progress: bool = True) -> bytes:
             start = len(decoded_data) - offset
             end = start + length
 
-            if start < 0 or start >= len(decoded_data):
-                raise ValueError(f"Invalid offset: {offset}")
+            if start < 0 or offset > len(decoded_data):
+                raise ValueError(f"Invalid offset: {offset}, decoded length: {len(decoded_data)}")
 
-            decoded_data.extend(decoded_data[start:end])
+            for j in range(length):
+                if start + j >= len(decoded_data):
+                    raise ValueError(f"Invalid copy operation: start={start}, j={j}, length={len(decoded_data)}")
+                decoded_data.append(decoded_data[start + j])
+
+    while i < n:
+        decoded_data.append(encoded_data[i])
+        i += 1
 
     if show_progress:
         print_progress(n, n, prefix='Прогресс:', suffix=f'Обработано {n}/{n} байт')
