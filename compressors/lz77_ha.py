@@ -1,5 +1,3 @@
-import sys
-import time
 import queue
 import pickle
 import struct
@@ -17,8 +15,11 @@ class HuffmanNode:
         return self.frequency < other.frequency
 
 
-def print_progress(iteration, total, prefix='', suffix='', length=50, fill='█'):
-    """Выводит progress bar в терминал"""
+import sys
+import time
+
+
+def print_progress(iteration: int, total: int, prefix: str = '', suffix: str = '', length: int = 50, fill: str = '█'):
     percent = f"{100 * (iteration / float(total)):.1f}"
     filled_length = int(length * iteration // total)
     bar = fill * filled_length + '-' * (length - filled_length)
@@ -28,87 +29,108 @@ def print_progress(iteration, total, prefix='', suffix='', length=50, fill='█'
         print()
 
 
-def lz77_compress(data, buffer_size=1024, max_length=255, show_progress=True):
-    """LZ77 компрессия с прогресс-баром"""
-    encoded = bytearray()
+def lz77_compress(data: bytes, buffer_size: int = 1024, max_length: int = 255, show_progress: bool = True) -> bytes:
+    encoded_data = bytearray()
     i = 0
     n = len(data)
+    last_update = 0
+
+    if show_progress:
+        print("Сжатие данных...")
 
     while i < n:
-        if show_progress:
-            print_progress(i, n, prefix='LZ77 Сжатие:', suffix=f'{i}/{n} байт')
+        if show_progress and time.time() - last_update > 0.1:
+            print_progress(i, n, prefix='Прогресс:', suffix=f'Обработано {i}/{n} байт')
+            last_update = time.time()
 
+        search_start = max(0, i - buffer_size)
+        search_end = i
+        max_match_length = 0
         best_offset = 0
-        best_len = 0
-        window_start = max(0, i - buffer_size)
 
-        for j in range(window_start, i):
-            current_len = 0
-            while (current_len < max_length and
-                   i + current_len < n and
-                   data[j + current_len] == data[i + current_len]):
-                current_len += 1
+        max_possible_length = min(max_length, n - i)
+        lookahead = min(4, max_possible_length)
+        substring_start = data[i:i + lookahead]
 
-            if current_len > best_len:
-                best_len = current_len
-                best_offset = i - j
+        pos = data.rfind(substring_start, search_start, search_end)
 
-        if best_len > 0:
-            encoded.extend(struct.pack('>H', best_offset))
-            encoded.extend(struct.pack('>H', best_len))
-            i += best_len
+        if pos != -1:
+            offset = search_end - pos
+            match_length = lookahead
+
+            while (match_length < max_possible_length and
+                   i + match_length < n and
+                   data[pos + (match_length % (search_end - pos))] == data[i + match_length]):
+                match_length += 1
+
+            if match_length > max_match_length:
+                max_match_length = match_length
+                best_offset = offset
+
+        if max_match_length > 0:
+            encoded_data.append((best_offset >> 8) & 0xFF)
+            encoded_data.append(best_offset & 0xFF)
+            encoded_data.append((max_match_length >> 8) & 0xFF)
+            encoded_data.append(max_match_length & 0xFF)
+            i += max_match_length
         else:
-            encoded.extend(b'\x00\x00\x00\x00')
-            encoded.append(data[i])
+            encoded_data.extend([0, 0, 0, 0])
+            encoded_data.append(data[i])
             i += 1
 
     if show_progress:
-        print_progress(n, n, prefix='LZ77 Сжатие:', suffix=f'Готово {n}/{n} байт')
-    return bytes(encoded)
+        print_progress(n, n, prefix='Прогресс:', suffix=f'Обработано {n}/{n} байт')
+        print(f"Сжатие завершено. Размер сжатых данных: {len(encoded_data)} байт")
+
+    return bytes(encoded_data)
 
 
-def lz77_decompress(encoded, show_progress=True):
-    """Исправленная версия LZ77 декомпрессора"""
-    decoded = bytearray()
+def lz77_decompress(encoded_data: bytes, show_progress: bool = True) -> bytes:
+    decoded_data = bytearray()
     i = 0
-    n = len(encoded)
+    n = len(encoded_data)
+    last_update = 0
+
+    if show_progress:
+        print("Распаковка данных...")
 
     while i + 4 <= n:
-        if show_progress:
-            print_progress(i, n, prefix='LZ77 Распаковка:', suffix=f'{i}/{n} байт')
+        if show_progress and time.time() - last_update > 0.1:
+            print_progress(i, n, prefix='Прогресс:', suffix=f'Обработано {i}/{n} байт')
+            last_update = time.time()
 
-        # Читаем offset и length (по 2 байта каждый)
-        offset = (encoded[i] << 8) | encoded[i + 1]
-        length = (encoded[i + 2] << 8) | encoded[i + 3]
+        offset = (encoded_data[i] << 8) | encoded_data[i + 1]
+        length = (encoded_data[i + 2] << 8) | encoded_data[i + 3]
         i += 4
 
         if offset == 0 and length == 0:
-            # Литерал
             if i >= n:
                 break
-            decoded.append(encoded[i])
+            decoded_data.append(encoded_data[i])
             i += 1
         else:
-            # Проверка корректности offset
-            if offset > len(decoded):
-                # Если offset превышает текущую длину - копируем с начала буфера
-                start = 0
-            else:
-                start = len(decoded) - offset
+            start = len(decoded_data) - offset
+            end = start + length
 
-            # Копируем данные с учётом возможного перекрытия
-            for _ in range(length):
-                if start >= len(decoded):
-                    break
-                decoded.append(decoded[start])
-                start += 1
+            if start < 0 or offset > len(decoded_data):
+                raise ValueError(f"Invalid offset: {offset}, decoded length: {len(decoded_data)}")
+
+            for j in range(length):
+                if start + j >= len(decoded_data):
+                    raise ValueError(f"Invalid copy operation: start={start}, j={j}, length={len(decoded_data)}")
+                decoded_data.append(decoded_data[start + j])
+
+    while i < n:
+        decoded_data.append(encoded_data[i])
+        i += 1
 
     if show_progress:
-        print_progress(n, n, prefix='LZ77 Распаковка:', suffix=f'Готово {n}/{n} байт')
-    return bytes(decoded)
+        print_progress(n, n, prefix='Прогресс:', suffix=f'Обработано {n}/{n} байт')
+        print(f"Распаковка завершена. Размер данных: {len(decoded_data)} байт")
+
+    return bytes(decoded_data)
 
 def build_huffman_tree(freq):
-    """Построение дерева Хаффмана"""
     heap = queue.PriorityQueue()
     for char, count in freq.items():
         heap.put(HuffmanNode(char=char, frequency=count))
@@ -123,7 +145,6 @@ def build_huffman_tree(freq):
 
 
 def build_code_map(root, path="", code_map=None):
-    """Построение таблицы кодирования"""
     if code_map is None:
         code_map = {}
     if root.char is not None:
@@ -135,7 +156,6 @@ def build_code_map(root, path="", code_map=None):
 
 
 def huffman_compress(data, show_progress=True):
-    """Huffman компрессия"""
     freq = defaultdict(int)
     for byte in data:
         freq[byte] += 1
@@ -157,7 +177,6 @@ def huffman_compress(data, show_progress=True):
 
 
 def huffman_decompress(compressed, code_map, show_progress=True):
-    """Huffman декомпрессия"""
     pad_info = compressed[0]
     bit_stream = ''.join(f"{byte:08b}" for byte in compressed[1:])
 
@@ -180,7 +199,6 @@ def huffman_decompress(compressed, code_map, show_progress=True):
 
 
 def lz77_huffman_compress(input_path, output_path, show_progress=True):
-    """Полный алгоритм LZ77 + Huffman"""
     start_time = time.time()
 
     
@@ -213,7 +231,6 @@ def lz77_huffman_compress(input_path, output_path, show_progress=True):
 
 
 def lz77_huffman_decompress(input_path, output_path, show_progress=True):
-    """Распаковка LZ77 + Huffman"""
     start_time = time.time()
 
     
@@ -224,14 +241,11 @@ def lz77_huffman_decompress(input_path, output_path, show_progress=True):
 
     
     code_map = pickle.loads(tree_bytes)
-
     
     lz77_compressed = huffman_decompress(huffman_compressed, code_map, show_progress=show_progress)
-
     
     data = lz77_decompress(lz77_compressed, show_progress=show_progress)
 
-    
     with open(output_path, 'wb') as f:
         f.write(data)
 

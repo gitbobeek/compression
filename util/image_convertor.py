@@ -1,7 +1,6 @@
 from PIL import Image
 import numpy as np
 import struct
-import os
 
 
 def png_to_raw(image_path, output_path):
@@ -39,25 +38,31 @@ def raw_to_png(raw_path, output_path, width=None, height=None, channels=3):
     image.save(output_path)
 
 
-def bw_to_raw(png_path, raw_path):
-    with Image.open(png_path) as img:
-        bw_img = img.convert('L')
-        width, height = bw_img.size
-        pixel_data = list(bw_img.getdata())
+def png_to_binary_raw(input_path, output_path, threshold=128):
+    with Image.open(input_path) as img:
+        gray_img = img.convert('L')
 
-        with open(raw_path, 'wb') as raw_file:
-            raw_file.write(struct.pack('<II', width, height))
-            raw_file.write(bytes(pixel_data))
+        binary_array = np.array(gray_img)
+        binary_array = (binary_array > threshold).astype(np.uint8) * 255
 
-
-def raw_to_bw(raw_path, png_path):
-    with open(raw_path, 'rb') as raw_file:
-        width, height = struct.unpack('<II', raw_file.read(8))
-        pixel_data = raw_file.read()
-        img = Image.frombytes('L', (width, height), pixel_data)
-        img.save(png_path)
+        binary_array.tofile(output_path)
 
 
-bw_to_raw("../test_files/png/bw.png", "../test_files/bw.raw")
-png_to_raw("../test_files/png/rgb.png", "../test_files/rgb.raw")
-png_to_raw("../test_files/png/gs.png", "../test_files/gs.raw")
+def raw_binary_to_png(input_path, output_path, width, height):
+    binary_array = np.fromfile(input_path, dtype=np.uint8)
+
+    expected_size = width * height
+    if len(binary_array) != expected_size:
+        raise ValueError(f"Ожидалось {expected_size} байт, получено {len(binary_array)}. Проверьте width и height.")
+
+    img = Image.fromarray(binary_array.reshape(height, width), 'L')
+    img.save(output_path)
+
+
+# bw_to_raw("../test_files/png/bw.png", "../test_files/bw.raw")
+# png_to_raw("../test_files/png/rgb.png", "../test_files/rgb.raw")
+# png_to_raw("../test_files/png/gs.png", "../test_files/gs.raw")
+# raw_to_png()
+
+# png_to_binary_raw("../test_files/png/rgb.png", "../test_files/bw2.raw")
+raw_binary_to_png("../test_files/bw2.raw", "converted.png", 1920, 1080)

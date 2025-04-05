@@ -12,7 +12,7 @@ def print_progress(iteration: int, total: int, prefix: str = '', suffix: str = '
         print()
 
 
-def lz77_compress(data: bytes, buffer_size: int = 1024, max_length: int = 255, show_progress: bool = True) -> bytes:
+def lz77_compress(data: bytes, buffer_size: int = 1024 * 10, max_length: int = 255, show_progress: bool = True) -> bytes:
     encoded_data = bytearray()
     i = 0
     n = len(data)

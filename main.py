@@ -1,23 +1,27 @@
-from numpy.ma.core import compressed
+from compressing_algorithms.lz77 import *
 
-from compressors.lz78_ha import *
+def test_algorithm(input_file, compressed_file, output_file):
+    with open(input_file, 'rb') as file:
+        data = file.read()
+    compressed_data = lz77_compress(data)
+    with open(compressed_file, 'wb') as file:
+        file.write(compressed_data)
+    decompressed_data = lz77_decompress(compressed_data)
+    with open(output_file, 'wb') as file:
+        file.write(decompressed_data)
+
+    print(data == decompressed_data)
+    print(format(len(data) / len(compressed_data), '.3f'))
+
+
+# def test_compressor(input_file, compressed_file, output_file):
+#     lz77_huffman_compress(input_file, compressed_file)
+#     lz77_huffman_decompress(compressed_file, output_file)
 
 
 if __name__ == "__main__":
-    input_file = "test_files/gs.raw"
-    compressed_file = "tests/compressed_files/gs_photo/LZ78_HA_compressed.bin"
-    decompressed_file = "tests/decompressed_files/gs_photo/LZ78_HA_decompressed.txt"
+    input_file = "test_files/enwik7.txt"
+    compressed_file = "tests/compressed_files/enwik7/LZ77_compressed.bin"
+    output_file = "tests/decompressed_files/enwik7/LZ77_decompressed.txt"
 
-    # Сжатие
-    lz78_huffman_compress(input_file, compressed_file)
-
-    # Распаковка
-    lz78_huffman_decompress(compressed_file, decompressed_file)
-
-    # Проверка
-    with open(input_file, 'rb') as f1, open(decompressed_file, 'rb') as f2, open(compressed_file, 'rb') as f3:
-        original = f1.read()
-        decompressed = f2.read()
-        compressed = f3.read()
-        print(len(original) / len(compressed))
-        print("Проверка целостности:", "OK" if original == decompressed else "FAILED")
+    test_algorithm(input_file, compressed_file, output_file)

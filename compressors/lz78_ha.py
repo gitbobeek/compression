@@ -16,7 +16,6 @@ class HuffmanNode:
 
 
 def lz78_compress(data: bytes) -> bytes:
-    """LZ78 компрессия с выводом (index, byte) пар"""
     dictionary = {b'': 0}
     current_string = b''
     compressed_data = bytearray()
@@ -131,7 +130,6 @@ def huffman_decompress(compressed, code_map):
 
 
 def lz78_huffman_compress(input_path, output_path):
-    """Полный алгоритм LZ78 + Huffman"""
     with open(input_path, 'rb') as f:
         data = f.read()
 
@@ -152,8 +150,7 @@ def lz78_huffman_compress(input_path, output_path):
         f.write(huffman_compressed)
 
 
-def lz78_huffman_decompress(input_path, output_path):
-    """Распаковка LZ78 + Huffman"""
+def lz78_huffman_decompress(input_path):
     with open(input_path, 'rb') as f:
         
         tree_len = struct.unpack('>I', f.read(4))[0]
@@ -169,8 +166,19 @@ def lz78_huffman_decompress(input_path, output_path):
     
     data = lz78_decompress(lz78_compressed)
 
-    
-    with open(output_path, 'wb') as f:
-        f.write(data)
+    return data
+
+input_file = "../test_files/bw.raw"
+compressed_file = "../tests/compressed_files/bw_photo/LZ78_HA_compressed.bin"
+output_file = "../tests/decompressed_files/bw_photo/LZ78_HA_decompressed.txt"
 
 
+lz78_huffman_compress(input_file, compressed_file)
+decompressed_data = lz78_huffman_decompress(compressed_file)
+with open(output_file, 'wb') as file:
+    file.write(decompressed_data)
+
+data = open(input_file, 'rb').read()
+compressed_data = open(compressed_file, 'rb').read()
+print(data == decompressed_data)
+print(format(len(data) / len(compressed_data), '.3f'))
